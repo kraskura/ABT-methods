@@ -1,0 +1,185 @@
+---
+title: "Breakpoint methods in R"
+author: "Emily Hardison and Krista Kraskura"
+date: "1/14/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Good initial resource [here](https://lindeloev.github.io/mcp/articles/packages.html)
+
+### What are methods used by researchers in the field:
+
+1. "Piecewise linear regression models **(Satistica 13)**"
+    - https://www.sciencedirect.com/science/article/pii/S0306456519304814
+2. Matt Gilbert used R Studio (R Core Team, 2014) except for the segmented regression analysis which, along with all data presentation, was done using **Prism v.8.3.** 
+    - https://academic.oup.com/conphys/article/8/1/coaa036/5823905#202778356
+3. Katja Anttila was "finding best fits for two linear regression lines and calculating their
+intercept (**Sigmaplot 11.0**, Systat Software Inc., www.sigmaplot.com)."
+    - https://www.nature.com/articles/ncomms5252
+  
+  
+### What are methods available in R that we will compare below:
+
+1. package `segmented`
+    - https://rpubs.com/MarkusLoew/12164
+2. package `EnvCpt`
+    - Detection of Structural Changes in Climate and Environment Time Series
+3. package `strucchange`
+    - function: `breakpoints()`
+    - function: `efp()`
+    - funciton: `Fstats()`
+4. 
+
+
+#### Install packages to be used:
+```{r}
+# packages for breakpoint analysis
+library(mcp)
+library(EnvCpt) 
+library(segmented)
+library(strucchange) # Fstats 
+
+# additional packages
+library(tidyverse)
+library(ggplot2)
+
+```
+
+
+```{r}
+set.seed(423485)
+```
+
+
+#### Viewving the original dataset
+
+
+```{r}
+data<-read.csv("../data/abt_example_data.csv")
+data.max<-data %>% 
+  dplyr::group_by(channel) %>% 
+  summarise(max_bpm = max(bpm))
+
+data_full<-left_join(data, data.max)
+
+# str(data_full)
+data_full2 <- data_full %>% 
+filter(
+    bpm == max_bpm) %>% 
+  rename(tpeak=temp_mean)
+
+data_full3<-left_join(data_full, data_full2, by = "channel") %>% 
+  filter(temp_mean<=tpeak) %>% 
+  mutate(
+    kelvin = temp_mean + 273.15,
+    arrhenius_temp = (10^3)/(kelvin)) %>% 
+  as.data.frame()
+data_full3<-data_full3[, c("channel", "timepoint.x", "bpm.x", "temp_mean", "arrhenius_temp", "tpeak")]
+
+ggplot(data_full3, aes(1000/celsius.to.kelvin(temp_mean), log(bpm.x)))+
+  geom_point()+
+  theme_bw()+
+  facet_grid(.~channel)+
+  labs(
+        x = expression(paste(Arrhenius~temperature~(10^3*K^-1))),
+        y = expression(paste(ln(f[Hmax]))))
+  
+list.data<-split(data_full3,  data_full3$channel)
+ch1<-as.data.frame(list.data[1]) 
+colnames(ch1)<-colnames(data_full3)
+ch2<-as.data.frame(list.data[2])
+colnames(ch1)<-colnames(data_full3)
+ch6<-as.data.frame(list.data[3])
+
+```
+
+```{r}
+
+library(mcp)
+
+# Plot it
+plot(df)
+abline(v = c(30, 70), col="red")
+
+
+```
+
+
+
+#### Segmented 
+
+* uses bootstrap 
+* can set seed
+* can provide primer values
+* obtain SE around estimated parameters
+
+```{r}
+### Fit a lm to each fish ID
+
+df<- data_full3[data_full3$channel=="Ch1",]
+
+for (i in 1:300){
+  if(i == 100 |i == 200 |i == 300){
+    set.seed(i)
+  }
+      
+    fish.lm <- lm(log10(bpm.x) ~ arrhenius_temp, data = df)
+    ### Run a breakpoint test on all the data (since you need to estimate the breakpoints, I split the files up by temperature)
+    
+    my.seg <- segmented(fish.lm,
+                      seg.Z = ~ arrhenius_temp,
+                      psi = list(arrhenius_temp = c(3.44)))
+    
+    my.fitted <- fitted(my.seg)
+    my.model <- data.frame(a.temp = df$arrhenius_temp, bpm = my.fitted)
+
+    p <- ggplot(df, aes(x = arrhenius_temp, y = log10(bpm.x))) + geom_line()
+    plot.data <- p + geom_line(data = my.model, aes(x = a.temp, y = bpm), colour = "red")+
+      geom_vline(aes(xintercept = my.seg$psi[2]))+
+      labs(
+        x = expression(paste(Arrhenius~temperature~(10^3*K^-1))),
+        y = expression(paste(ln(f[Hmax]))))
+
+    print(c(i, my.seg$psi[2]))
+  
+}
+
+    
+
+
+
+
+```
+
+
+#### SiZer
+
+* uses bootstrap 
+* can set seed
+* can provide primer values
+* obtain CI around estimated parameters, can specify sign level
+
+
+```{r}
+
+```
+
+
+```{r}
+library(strucchange)
+
+strucchange::breakpoints
+
+
+
+```
+
+
+
+
+
+
